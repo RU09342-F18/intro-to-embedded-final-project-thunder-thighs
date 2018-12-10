@@ -1,77 +1,111 @@
-#include <msp430.h> 
+#include <intrinsics.h>
+#include <stdint.h>
+#include <msp430.h>
 
+#define TRIGGER_PIN BIT1   // P6.1
+#define ECHO_PIN BIT3  // P1.3
+#define LED_PIN BIT0   // P1.0
+#define DISTANCE_THRESHOLD 30  // cm
+#define DISTANCE_THRESHOLD2 75  // cm
+#define DISTANCE_THRESHOLD3 115  // cm
+#define MEASURE_INTERVAL 2048  // ~250 ms
 
-/**
- * main.c
- */
-float time, distance;
+void triggerMeasurement() {
+    // Start trigger
+    P6OUT |= TRIGGER_PIN;
 
-void initializeGPIO () {
-    P1DIR |= BIT0;      //led test pin
-    P1DIR |= BIT3;      //pin 1.3 echo
-    P2DIR |= BIT0;      //pin 2.0 trigger
-    P1IFG &= ~BIT3;     //clear interrupt flag
-    P1IE |= BIT3;       //enable port interrupt
-    P1IES &= ~BIT3;     //set interrupt edge low/high
+    // Wait a small amount of time with trigger high, > 10us required (~10 clock cycles at 1MHz MCLK)
+    __delay_cycles(10);
+
+    // End trigger
+    P6OUT &= ~TRIGGER_PIN;
 }
 
-void initializeTimerSend() {
-    TA0CTL = TASSEL_2 + MC_1 + TACLR;       //SMCLK in up mode
-    TA0CCR0 = 20000;           //send every 20000us
-    TA0CCTL0 = CCIE;        //enable interrupt
+int main(void) {
+    WDTCTL = WDTPW | WDTHOLD;
+
+    // Configure trigger pin, low to start
+    P6DIR |= TRIGGER_PIN;
+    P6OUT &= ~TRIGGER_PIN;
+
+    // Configure LED, off to start
+    P1DIR |= BIT2;
+    P1OUT &= ~BIT2;
+    P1DIR |= BIT4;
+    P1OUT &= ~BIT4;
+    P1DIR |= BIT5;
+    P1OUT &= ~BIT5;
+    // Configure echo pin as capture input to TA0CCR2
+    P1DIR &= ~ECHO_PIN;
+    P1SEL |= ECHO_PIN;
+
+    // Set up TA0 to capture in CCR2 on both edges from P1.3 (echo pin)
+    TA0CCTL2 = CM_3 | CCIS_0 | SCS | CAP | CCIE;
+
+    // Set up TA0 to compare CCR0 (measure interval)
+    TA0CCR0 = MEASURE_INTERVAL;
+    TA0CCTL0 = CCIE;
+
+    // Set up TA0 with ACLK / 4 = 8192 Hz
+    TA0CTL = TASSEL__ACLK | ID__4 | MC__CONTINUOUS | TACLR;
+
+    uint16_t lastCount = 0;
+    uint32_t distance = 0;
+
+    for (;;)
+    {
+        triggerMeasurement();
+
+        // Wait for echo start
+        __low_power_mode_3();
+
+        lastCount = TA0CCR2;
+
+        // Wait for echo end
+        __low_power_mode_3();
+
+        distance = TA0CCR2 - lastCount;
+        distance *= 34000;
+        distance >>= 14;  // division by 16384 (2 ^ 14)
+
+        if (distance <= DISTANCE_THRESHOLD)
+        {
+            // Turn on LED
+            P1OUT |= BIT2;
+        }
+        if (distance <= (DISTANCE_THRESHOLD2))
+        {
+            // Turn off LED
+            P1OUT |= BIT4;
+        }
+        if (distance <= (DISTANCE_THRESHOLD3))
+                {
+                    // Turn off LED
+                    P1OUT |= BIT5 ;
+                }
+        else
+        {
+                   // Turn off LED
+                   P1OUT &= ~BIT2;
+                   P1OUT &= ~BIT4;
+                   P1OUT &= ~BIT5;
+        }
+
+        // Wait for the next measure interval tick
+        __low_power_mode_3();
+    }
 }
 
-void initializeTimerT() {
-    TA1CTL = TASSEL_2 + MC_0  + TACLR;      //SMCLK in stop mode
-    TA1CCR0 = 50000;
+#pragma vector = TIMER0_A0_VECTOR
+__interrupt void TIMER0_A0_ISR (void) {
+    // Measure interval tick
+    __low_power_mode_off_on_exit();
+    TA0CCR0 += MEASURE_INTERVAL;
 }
 
-void initializeUART() {
-    P4SEL |= BIT4 + BIT5;
-    P3SEL |= BIT3 + BIT4;
-
-    UCA1CTL1 |= UCSWRST;                    //reset state machine
-    UCA1CTL1 |= UCSSEL_2;                   //SMCLK for UART
-    UCA1BR0 = 104;                          //
-    UCA1BR1 = 0;                            //
-    UCA1MCTL |= UCBRS_1 + UCBRF_0;          //Modulation
-    UCA1CTL1 &= ~UCSWRST;                   //Initialize USCI state machine
-    UCA1IE |= UCRXIE;                       //Enable USCI_A0 RX interrupt
-    UCA1IFG &= ~UCRXIFG;                                        //Reset/Clear interrupt flags*/
+#pragma vector = TIMER0_A1_VECTOR
+__interrupt void TIMER0_A1_ISR (void) {
+    // Echo pin state toggled
+    __low_power_mode_off_on_exit();
+    TA0IV = 0;
 }
-
-int main(void)
-{
-	WDTCTL = WDTPW | WDTHOLD;	// stop watchdog timer
-	initializeGPIO();
-	initializeTimerSend();
-	initializeUART();
-	initializeTimerT();
-	__bis_SR_register(GIE);
-	while(1);
-}
-
-#pragma vector = PORT1_VECTOR
-__interrupt void Port_1(void){
-
-    TA1CTL = MC_0;          //stop timing timer
-    time = TA1R;            //get time value
-    distance = time/58;     //convert to distance
-    TA1CTL = TACLR;         //clear timing timer
-    TA0CTL = MC_1;          //start send timer
-    P1IFG &= ~BIT3;         //clear interrupt flag
-    P1OUT &= ~BIT3;         //set trigger low
-
-}
-
-#pragma vector = TIMER0_A0_VECTOR           //send timer
-__interrupt void Timer_Send (void){
-
-    P2OUT |= BIT0;          //send trigger
-    TA0CTL = MC_0;          //stop send timer
-    TA0CTL = TACLR;         //reset send timer
-    TA0IV = 0;              //clear send timer interrupt flag
-    TA1CTL = MC_2;          //start timing timer in continuous mode
-
-}
-
