@@ -4,10 +4,9 @@
 
 #define TRIGGER_PIN BIT1   // P6.1
 #define ECHO_PIN BIT3  // P1.3
-#define LED_PIN BIT0   // P1.0
-#define DISTANCE_THRESHOLD 10  // cm
-#define DISTANCE_THRESHOLD2 25 // cm
-#define DISTANCE_THRESHOLD3 36  // cm
+#define Danger 10  // cm
+#define Caution 25 // cm
+#define Alert 36  // cm
 #define MEASURE_INTERVAL 2048  // ~250 ms
 
 void triggerMeasurement() {
@@ -22,19 +21,19 @@ void triggerMeasurement() {
 }
 
 int main(void) {
-    WDTCTL = WDTPW | WDTHOLD;
+    WDTCTL = WDTPW | WDTHOLD;   //disable watchdog timer
 
     // Configure trigger pin, low to start
     P6DIR |= TRIGGER_PIN;
     P6OUT &= ~TRIGGER_PIN;
 
-    // Configure LED, off to start
-    P1DIR |= BIT2;
-    P1OUT &= ~BIT2;
-    P1DIR |= BIT4;
-    P1OUT &= ~BIT4;
-    P1DIR |= BIT5;
-    P1OUT &= ~BIT5;
+    // Configure LEDs, off to start
+    P1DIR |= BIT2;      //Red
+    P1OUT &= ~BIT2;     //Red
+    P1DIR |= BIT4;      //Yellow
+    P1OUT &= ~BIT4;     //Yellow
+    P1DIR |= BIT5;      //Blue
+    P1OUT &= ~BIT5;     //Blue
     // Configure echo pin as capture input to TA0CCR2
     P1DIR &= ~ECHO_PIN;
     P1SEL |= ECHO_PIN;
@@ -51,15 +50,16 @@ int main(void) {
 
     int16_t lastCount = 0;
     int32_t distance = 0;
+    
     //UART setup
     P4SEL |= BIT4 | BIT5;                                       // Pin4.4 set as TXD output,  Pin4.5 set as RXD input
-        UCA1CTL1 |= UCSWRST;                                        // State Machine Reset + Small Clock Initialization
-        UCA1CTL1 |= UCSSEL_1;                                       // Sets USCI Clock Source to SMCLK (32kHz)
-        UCA1BR0 = 0x03;                                             // Setting the Baud Rate to be 9600
-        UCA1BR1 = 0x00;                                             // Setting the Baud Rate to be 9600
-        UCA1MCTL = UCBRS_3+UCBRF_0;                                 // Modulation UCBRSx=3, UCBRFx=0
-        UCA1CTL1 &= ~UCSWRST;                                       // Initialize USCI State Machine
-        UCA1IE |= UCRXIE;
+    UCA1CTL1 |= UCSWRST;                                        // State Machine Reset + Small Clock Initialization
+    UCA1CTL1 |= UCSSEL_1;                                       // Sets USCI Clock Source to SMCLK (32kHz)
+    UCA1BR0 = 0x03;                                             // Setting the Baud Rate to be 9600
+    UCA1BR1 = 0x00;                                             // Setting the Baud Rate to be 9600
+    UCA1MCTL = UCBRS_3+UCBRF_0;                                 // Modulation UCBRSx=3, UCBRFx=0
+    UCA1CTL1 &= ~UCSWRST;                                       // Initialize USCI State Machine
+    UCA1IE |= UCRXIE;
 
     for (;;)
     {
@@ -77,22 +77,24 @@ int main(void) {
         distance *= 34000;
         distance >>= 14;  // division by 16384 (2 ^ 14)
 
-        if (distance <= DISTANCE_THRESHOLD)
+        if (distance <= Danger)
         {
-            // Turn on LED
+            // Turn on LED Red
             P1OUT |= BIT2;
         }
-        if (distance <= (DISTANCE_THRESHOLD2))
+        if (distance <= Caution)
         {
+            //Turn on LED Yellow
             P1OUT |= BIT4;
         }
-        if (distance <= (DISTANCE_THRESHOLD3))
-                {
-                    P1OUT |= BIT5 ;
-                }
+        if (distance <= Alert)
+        {
+            //Turn on LED Blue
+            P1OUT |= BIT5 ;
+        }
         else
         {
-                   // Turn off LED
+                   // Turn off LEDs
                    P1OUT &= ~BIT2;
                    P1OUT &= ~BIT4;
                    P1OUT &= ~BIT5;
