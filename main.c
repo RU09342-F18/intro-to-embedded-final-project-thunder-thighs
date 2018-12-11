@@ -5,9 +5,9 @@
 #define TRIGGER_PIN BIT1   // P6.1
 #define ECHO_PIN BIT3  // P1.3
 #define LED_PIN BIT0   // P1.0
-#define DISTANCE_THRESHOLD 30  // cm
-#define DISTANCE_THRESHOLD2 75  // cm
-#define DISTANCE_THRESHOLD3 115  // cm
+#define DISTANCE_THRESHOLD 10  // cm
+#define DISTANCE_THRESHOLD2 25 // cm
+#define DISTANCE_THRESHOLD3 36  // cm
 #define MEASURE_INTERVAL 2048  // ~250 ms
 
 void triggerMeasurement() {
@@ -49,21 +49,17 @@ int main(void) {
     // Set up TA0 with ACLK / 4 = 8192 Hz
     TA0CTL = TASSEL__ACLK | ID__4 | MC__CONTINUOUS | TACLR;
 
-    uint16_t lastCount = 0;
-    uint32_t distance = 0;
-//UART setup
-    P4SEL |= BIT4;                            // UART TX
-      P4SEL |= BIT5;                            // UART RX
-
-      UCA1CTL1 |= UCSWRST;                      // Clears the UART control register 1
-      UCA1CTL1 |= UCSSEL_2;                     // Sets SMCLK
-      UCA1BR0 = 104;                            // For baud rate of 9600
-      UCA1BR1 = 0;                              // For baud rate of 9600
-
-      UCA1MCTL |= UCBRS_2;                      // set modulation pattern to high on bit 1 & 5
-      UCA1CTL1 &= ~UCSWRST;                     // initialize USCI
-      UCA1IE |= UCRXIE;                         // enable USCI_A1 RX interrupt
-      UCA1IFG &= ~UCRXIFG;                      // clears interrupt flags
+    int16_t lastCount = 0;
+    int32_t distance = 0;
+    //UART setup
+    P4SEL |= BIT4 | BIT5;                                       // Pin4.4 set as TXD output,  Pin4.5 set as RXD input
+        UCA1CTL1 |= UCSWRST;                                        // State Machine Reset + Small Clock Initialization
+        UCA1CTL1 |= UCSSEL_1;                                       // Sets USCI Clock Source to SMCLK (32kHz)
+        UCA1BR0 = 0x03;                                             // Setting the Baud Rate to be 9600
+        UCA1BR1 = 0x00;                                             // Setting the Baud Rate to be 9600
+        UCA1MCTL = UCBRS_3+UCBRF_0;                                 // Modulation UCBRSx=3, UCBRFx=0
+        UCA1CTL1 &= ~UCSWRST;                                       // Initialize USCI State Machine
+        UCA1IE |= UCRXIE;
 
     for (;;)
     {
@@ -88,12 +84,10 @@ int main(void) {
         }
         if (distance <= (DISTANCE_THRESHOLD2))
         {
-            // Turn off LED
             P1OUT |= BIT4;
         }
         if (distance <= (DISTANCE_THRESHOLD3))
                 {
-                    // Turn off LED
                     P1OUT |= BIT5 ;
                 }
         else
@@ -104,7 +98,6 @@ int main(void) {
                    P1OUT &= ~BIT5;
         }
         UCA1TXBUF = distance;
-
         // Wait for the next measure interval tick
         __low_power_mode_3();
     }
