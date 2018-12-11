@@ -51,6 +51,19 @@ int main(void) {
 
     uint16_t lastCount = 0;
     uint32_t distance = 0;
+//UART setup
+    P4SEL |= BIT4;                            // UART TX
+      P4SEL |= BIT5;                            // UART RX
+
+      UCA1CTL1 |= UCSWRST;                      // Clears the UART control register 1
+      UCA1CTL1 |= UCSSEL_2;                     // Sets SMCLK
+      UCA1BR0 = 104;                            // For baud rate of 9600
+      UCA1BR1 = 0;                              // For baud rate of 9600
+
+      UCA1MCTL |= UCBRS_2;                      // set modulation pattern to high on bit 1 & 5
+      UCA1CTL1 &= ~UCSWRST;                     // initialize USCI
+      UCA1IE |= UCRXIE;                         // enable USCI_A1 RX interrupt
+      UCA1IFG &= ~UCRXIFG;                      // clears interrupt flags
 
     for (;;)
     {
@@ -90,6 +103,7 @@ int main(void) {
                    P1OUT &= ~BIT4;
                    P1OUT &= ~BIT5;
         }
+        UCA1TXBUF = distance;
 
         // Wait for the next measure interval tick
         __low_power_mode_3();
