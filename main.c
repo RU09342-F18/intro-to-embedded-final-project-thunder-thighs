@@ -1,77 +1,138 @@
-#include <msp430.h> 
-
-
-/**
- * main.c
+/* Authors: Nick Scamardi, Eric Schroeder & Nick Setaro
+ * Written: December 5, 2018
+ * Last Update: December 12, 2018
  */
-float time, distance;
 
-void initializeGPIO () {
-    P1DIR |= BIT0;      //led test pin
-    P1DIR |= BIT3;      //pin 1.3 echo
-    P2DIR |= BIT0;      //pin 2.0 trigger
-    P1IFG &= ~BIT3;     //clear interrupt flag
-    P1IE |= BIT3;       //enable port interrupt
-    P1IES &= ~BIT3;     //set interrupt edge low/high
+#include <intrinsics.h>
+#include <stdint.h>
+#include <msp430.h>
+
+#define TRIGGER_PIN BIT1   // P6.1
+#define ECHO_PIN BIT3  // P1.3
+#define LED_PIN BIT0   // P1.0
+#define DISTANCE_THRESHOLD 10  // cm
+#define DISTANCE_THRESHOLD2 25 // cm
+#define DISTANCE_THRESHOLD3 36  // cm
+#define Danger 10  // cm
+#define Caution 25 // cm
+#define Alert 36  // cm
+#define MEASURE_INTERVAL 2048  // ~250 ms
+
+void triggerMeasurement() {
+     // Start trigger
+     P6OUT |= TRIGGER_PIN;
+
+     // Wait a small amount of time with trigger high, > 10us required (~10 clock cycles at 1MHz MCLK)
+     __delay_cycles(10);
+
+     // End trigger
+     P6OUT &= ~TRIGGER_PIN;
 }
+ int main(void) {
+    WDTCTL = WDTPW | WDTHOLD;
+    WDTCTL = WDTPW | WDTHOLD;   //disable watchdog timer
 
-void initializeTimerSend() {
-    TA0CTL = TASSEL_2 + MC_1 + TACLR;       //SMCLK in up mode
-    TA0CCR0 = 20000;           //send every 20000us
-    TA0CCTL0 = CCIE;        //enable interrupt
-}
+    // Configure trigger pin, low to start
+    P6DIR |= TRIGGER_PIN;
+    P6OUT &= ~TRIGGER_PIN;
 
-void initializeTimerT() {
-    TA1CTL = TASSEL_2 + MC_0  + TACLR;      //SMCLK in stop mode
-    TA1CCR0 = 50000;
-}
+    // Configure LEDs, off to start
+    P1DIR |= BIT2;      // Red LED
+    P1OUT &= ~BIT2;     // Red LED
+    P1DIR |= BIT4;      // Yellow LED
+    P1OUT &= ~BIT4;     // Yellow LED
+    P1DIR |= BIT5;      // Green LED
+    P1OUT &= ~BIT5;     // Green LED
 
-void initializeUART() {
-    P4SEL |= BIT4 + BIT5;
-    P3SEL |= BIT3 + BIT4;
+    // Configure echo pin as capture input to TA0CCR2
+    P1DIR &= ~ECHO_PIN;
+    P1SEL |= ECHO_PIN;
 
-    UCA1CTL1 |= UCSWRST;                    //reset state machine
-    UCA1CTL1 |= UCSSEL_2;                   //SMCLK for UART
-    UCA1BR0 = 104;                          //
-    UCA1BR1 = 0;                            //
-    UCA1MCTL |= UCBRS_1 + UCBRF_0;          //Modulation
-    UCA1CTL1 &= ~UCSWRST;                   //Initialize USCI state machine
-    UCA1IE |= UCRXIE;                       //Enable USCI_A0 RX interrupt
-    UCA1IFG &= ~UCRXIFG;                                        //Reset/Clear interrupt flags*/
-}
+    // Set up TA0 to capture in CCR2 on both edges from P1.3 (echo pin)
+    TA0CCTL2 = CM_3 | CCIS_0 | SCS | CAP | CCIE;
 
-int main(void)
-{
-	WDTCTL = WDTPW | WDTHOLD;	// stop watchdog timer
-	initializeGPIO();
-	initializeTimerSend();
-	initializeUART();
-	initializeTimerT();
-	__bis_SR_register(GIE);
-	while(1);
-}
+    // Set up TA0 to compare CCR0 (measure interval)
+    TA0CCR0 = MEASURE_INTERVAL;
+    TA0CCTL0 = CCIE;
 
-#pragma vector = PORT1_VECTOR
-__interrupt void Port_1(void){
+    // Set up TA0 with ACLK / 4 = 8192 Hz
+    TA0CTL = TASSEL__ACLK | ID__4 | MC__CONTINUOUS | TACLR;
+    int16_t lastCount = 0;
+    int32_t distance = 0;
 
-    TA1CTL = MC_0;          //stop timing timer
-    time = TA1R;            //get time value
-    distance = time/58;     //convert to distance
-    TA1CTL = TACLR;         //clear timing timer
-    TA0CTL = MC_1;          //start send timer
-    P1IFG &= ~BIT3;         //clear interrupt flag
-    P1OUT &= ~BIT3;         //set trigger low
+    //UART setup
+    P4SEL |= BIT4 | BIT5;                                       // Pin4.4 set as TXD output,  Pin4.5 set as RXD input
 
-}
+    UCA1CTL1 |= UCSWRST;                                        // State Machine Reset + Small Clock Initialization
+    UCA1CTL1 |= UCSSEL_1;                                       // Sets USCI Clock Source to SMCLK (32kHz)
+    UCA1BR0 = 0x03;                                             // Setting the Baud Rate to be 9600
+    UCA1BR1 = 0x00;                                             // Setting the Baud Rate to be 9600
+    UCA1MCTL = UCBRS_3+UCBRF_0;                                 // Modulation UCBRSx=3, UCBRFx=0
+    UCA1CTL1 &= ~UCSWRST;                                       // Initialize USCI State Machine
+    UCA1IE |= UCRXIE;
+    UCA1CTL1 |= UCSWRST;                                        // State Machine Reset + Small Clock Initialization
+    UCA1CTL1 |= UCSSEL_1;                                       // Sets USCI Clock Source to SMCLK (32kHz)
+    UCA1BR0 = 0x03;                                             // Setting the Baud Rate to be 9600
+    UCA1BR1 = 0x00;                                             // Setting the Baud Rate to be 9600
+    UCA1MCTL = UCBRS_3+UCBRF_0;                                 // Modulation UCBRSx=3, UCBRFx=0
+    UCA1CTL1 &= ~UCSWRST;                                       // Initialize USCI State Machine
+    UCA1IE |= UCRXIE;
 
-#pragma vector = TIMER0_A0_VECTOR           //send timer
-__interrupt void Timer_Send (void){
+    for(;;)
+    {
+         triggerMeasurement();
 
-    P2OUT |= BIT0;          //send trigger
-    TA0CTL = MC_0;          //stop send timer
-    TA0CTL = TACLR;         //reset send timer
-    TA0IV = 0;              //clear send timer interrupt flag
-    TA1CTL = MC_2;          //start timing timer in continuous mode
+        // Wait for echo start
+        __low_power_mode_3();
 
-}
+         lastCount = TA0CCR2;
 
+        // Wait for echo end
+        __low_power_mode_3();
+
+        distance = TA0CCR2 - lastCount;
+        distance *= 34000;
+        distance >>= 14;  // division by 16384 (2 ^ 14)
+
+        if (distance <= Danger)
+        {
+            // Turn on LED Red
+            P1OUT |= BIT2;
+        }
+        if (distance <= Caution)
+        {
+            //Turn on LED Yellow
+            P1OUT |= BIT4;
+
+        }
+        if (distance <= Alert)
+        {
+            //Turn on LED Green
+            P1OUT |= BIT5;
+        }
+        else
+        {
+                   // Turn off LEDs
+                   P1OUT &= ~BIT2;
+                   P1OUT &= ~BIT4;
+                   P1OUT &= ~BIT5;
+         }
+         UCA1TXBUF = distance;
+         // Wait for the next measure interval tick
+         __low_power_mode_3();
+     }
+ }
+
+#pragma vector = TIMER0_A0_VECTOR
+ __interrupt void TIMER0_A0_ISR (void) {
+     // Measure interval tick
+     __low_power_mode_off_on_exit();
+     TA0CCR0 += MEASURE_INTERVAL;
+ }
+
+#pragma vector = TIMER0_A1_VECTOR
+ __interrupt void TIMER0_A1_ISR (void) {
+     // Echo pin state toggled
+     __low_power_mode_off_on_exit();
+     TA0IV = 0;
+ }
