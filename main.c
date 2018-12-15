@@ -13,7 +13,6 @@
 #define DISTANCE_THRESHOLD 10  // cm
 #define DISTANCE_THRESHOLD2 25 // cm
 #define DISTANCE_THRESHOLD3 36  // cm
-<<<<<<< HEAD
 #define MEASURE_INTERVAL 2048  // ~250 ms
 
 //distance variables
@@ -71,55 +70,6 @@ void triggerMeasurement() {
     int16_t lastCount = 0;
     int32_t distance = 0;
 
-=======
-#define Danger 10  // cm
-#define Caution 25 // cm
-#define Alert 36  // cm
-#define MEASURE_INTERVAL 2048  // ~250 ms
-
-void triggerMeasurement() {
-     // Start trigger
-     P6OUT |= TRIGGER_PIN;
-
-     // Wait a small amount of time with trigger high, > 10us required (~10 clock cycles at 1MHz MCLK)
-     __delay_cycles(10);
-
-     // End trigger
-     P6OUT &= ~TRIGGER_PIN;
-}
- int main(void) {
-    WDTCTL = WDTPW | WDTHOLD;
-    WDTCTL = WDTPW | WDTHOLD;   //disable watchdog timer
-
-    // Configure trigger pin, low to start
-    P6DIR |= TRIGGER_PIN;
-    P6OUT &= ~TRIGGER_PIN;
-
-    // Configure LEDs, off to start
-    P1DIR |= BIT2;      // Red LED
-    P1OUT &= ~BIT2;     // Red LED
-    P1DIR |= BIT4;      // Yellow LED
-    P1OUT &= ~BIT4;     // Yellow LED
-    P1DIR |= BIT5;      // Green LED
-    P1OUT &= ~BIT5;     // Green LED
-
-    // Configure echo pin as capture input to TA0CCR2
-    P1DIR &= ~ECHO_PIN;
-    P1SEL |= ECHO_PIN;
-
-    // Set up TA0 to capture in CCR2 on both edges from P1.3 (echo pin)
-    TA0CCTL2 = CM_3 | CCIS_0 | SCS | CAP | CCIE;
-
-    // Set up TA0 to compare CCR0 (measure interval)
-    TA0CCR0 = MEASURE_INTERVAL;
-    TA0CCTL0 = CCIE;
-
-    // Set up TA0 with ACLK / 4 = 8192 Hz
-    TA0CTL = TASSEL__ACLK | ID__4 | MC__CONTINUOUS | TACLR;
-    int16_t lastCount = 0;
-    int32_t distance = 0;
-
->>>>>>> 70638f1568eb78d1c66c4ff7c12cb7ca9ef67073
     //UART setup
     P4SEL |= BIT4 | BIT5;                                       // Pin4.4 set as TXD output,  Pin4.5 set as RXD input
 
@@ -137,7 +87,6 @@ void triggerMeasurement() {
     UCA1MCTL = UCBRS_3+UCBRF_0;                                 // Modulation UCBRSx=3, UCBRFx=0
     UCA1CTL1 &= ~UCSWRST;                                       // Initialize USCI State Machine
     UCA1IE |= UCRXIE;
-<<<<<<< HEAD
 
     for(;;)
     {
@@ -201,68 +150,12 @@ void triggerMeasurement() {
      TA0CCR0 += MEASURE_INTERVAL;
  }
 
-=======
-
-    for(;;)
-    {
-         triggerMeasurement();
-
-        // Wait for echo start
-        __low_power_mode_3();
-
-         lastCount = TA0CCR2;
-
-        // Wait for echo end
-        __low_power_mode_3();
-
-        distance = TA0CCR2 - lastCount;
-        distance *= 34000;
-        distance >>= 14;  // division by 16384 (2 ^ 14)
-
-        if (distance <= Danger)
-        {
-            // Turn on LED Red
-            P1OUT |= BIT2;
-        }
-        if (distance <= Caution)
-        {
-            //Turn on LED Yellow
-            P1OUT |= BIT4;
-
-        }
-        if (distance <= Alert)
-        {
-            //Turn on LED Green
-            P1OUT |= BIT5;
-        }
-        else
-        {
-                   // Turn off LEDs
-                   P1OUT &= ~BIT2;
-                   P1OUT &= ~BIT4;
-                   P1OUT &= ~BIT5;
-         }
-         UCA1TXBUF = distance;
-         // Wait for the next measure interval tick
-         __low_power_mode_3();
-     }
- }
-
-#pragma vector = TIMER0_A0_VECTOR
- __interrupt void TIMER0_A0_ISR (void) {
-     // Measure interval tick
-     __low_power_mode_off_on_exit();
-     TA0CCR0 += MEASURE_INTERVAL;
- }
-
->>>>>>> 70638f1568eb78d1c66c4ff7c12cb7ca9ef67073
 #pragma vector = TIMER0_A1_VECTOR
  __interrupt void TIMER0_A1_ISR (void) {
      // Echo pin state toggled
      __low_power_mode_off_on_exit();
      TA0IV = 0;
  }
-<<<<<<< HEAD
 
 #pragma vector = USCI_A1_VECTOR
 __interrupt void USCI_A1_ISR(void)
@@ -291,5 +184,3 @@ __interrupt void USCI_A1_ISR(void)
 
     byte += 1;  // Increment the byte variable by 1
 }
-=======
->>>>>>> 70638f1568eb78d1c66c4ff7c12cb7ca9ef67073
