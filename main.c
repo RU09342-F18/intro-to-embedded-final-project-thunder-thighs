@@ -1,6 +1,6 @@
 /* Authors: Nick Scamardi, Eric Schroeder & Nick Setaro
  * Written: December 5, 2018
- * Last Update: December 12, 2018
+ * Last Update: December 16, 2018
  */
 
 #include <intrinsics.h>
