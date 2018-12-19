@@ -10,9 +10,6 @@
 #define TRIGGER_PIN BIT1   // P6.1
 #define ECHO_PIN BIT3  // P1.3
 #define LED_PIN BIT0   // P1.0
-#define DISTANCE_THRESHOLD 10  // cm
-#define DISTANCE_THRESHOLD2 25 // cm
-#define DISTANCE_THRESHOLD3 36  // cm
 #define MEASURE_INTERVAL 2048  // ~250 ms
 
 //distance variables
@@ -106,26 +103,45 @@ void triggerMeasurement() {
 
         if (distance <= D_1)
         {
-            // Turn on LED Red
+            // Turn on LED Red, Yellow, Green, Blue, White
             P1OUT |= BIT2;
-        }
-        if (distance <= D_2)
-        {
-            //Turn on LED Yellow
             P1OUT |= BIT4;
-
-        }
-        if (distance <= D_3)
-        {
-            //Turn on LED Green
             P1OUT |= BIT5;
-        }
-        if (distance <= D_4) {
-            //Turn on LED Blue
             P1OUT |= BIT6;
-        }
-        if (distance <= D_5) {
+            P2OUT |= BIT0;
+
+        } else if (distance <= D_2)
+        {
+            //Turn on LED Yellow, Green, Blue, White
+            P1OUT &= ~BIT2;
+            P1OUT |= BIT4;
+            P1OUT |= BIT5;
+            P1OUT |= BIT6;
+            P2OUT |= BIT0;
+
+        }else if (distance <= D_3)
+        {
+            //Turn on LED Green, Blue, White
+            P1OUT &= ~BIT2;
+            P1OUT &= ~BIT4;
+            P1OUT |= BIT5;
+            P1OUT |= BIT6;
+            P2OUT |= BIT0;
+
+        }else if (distance <= D_4) {
+            //Turn on LED Blue
+            P1OUT &= ~BIT2;
+            P1OUT &= ~BIT4;
+            P1OUT &= ~BIT5;
+            P1OUT |= BIT6;
+            P2OUT |= BIT0;
+
+        }else if (distance <= D_5) {
             //Turn on LED White
+            P1OUT &= ~BIT2;
+            P1OUT &= ~BIT4;
+            P1OUT &= ~BIT5;
+            P1OUT &= ~BIT6;
             P2OUT |= BIT0;
         }
         else
@@ -137,9 +153,12 @@ void triggerMeasurement() {
                    P1OUT &= ~BIT6;
                    P2OUT &= ~BIT0;
          }
-         UCA1TXBUF = distance;
-         // Wait for the next measure interval tick
-         __low_power_mode_3();
+        if (distance > 0 || distance > 200) {
+            UCA1TXBUF = distance;
+            // Wait for the next measure interval tick
+            __low_power_mode_3();
+        }
+
      }
  }
 
@@ -164,15 +183,19 @@ __interrupt void USCI_A1_ISR(void)
     {
     case 0:
             D_1 = UCA1RXBUF;
+            byte += 1;  // Increment the byte variable by 1
             break;
     case 1:
             D_2 = UCA1RXBUF;
+            byte += 1;  // Increment the byte variable by 1
             break;
     case 2:
             D_3 = UCA1RXBUF;
+            byte += 1;  // Increment the byte variable by 1
             break;
     case 3:
             D_4 = UCA1RXBUF;
+            byte += 1;  // Increment the byte variable by 1
             break;
     case 4:
             D_5 = UCA1RXBUF;
@@ -182,5 +205,4 @@ __interrupt void USCI_A1_ISR(void)
             break;
     }
 
-    byte += 1;  // Increment the byte variable by 1
 }
