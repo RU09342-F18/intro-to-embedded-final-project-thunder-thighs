@@ -17,18 +17,5 @@ The main components used to build this milestone include:
 # Functionality of main.c
 
 ```c
-int main(void)
-{
-	WDTCTL = WDTPW | WDTHOLD;	// Disable the watchdog timer
-	
-	// Function Declarations
-	Timer_Setup();
-	LED_Setup();
-	UART_Setup();
 
-	__bis_SR_register(LPM0_bits + GIE); // Enter Low Power Mode once interrupt is detected & Global Interrupt Enable
-    __enable_interrupt();   // Enable interrupt algorithm
-
-    for(;;){}; // Infinite for loop
-}
 ```
