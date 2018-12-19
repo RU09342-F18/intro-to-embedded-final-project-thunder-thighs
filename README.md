@@ -18,7 +18,33 @@ The main components used to build this milestone include:
 
 
 # Functionality of main.c
+First, all of the variables used were initialized, as well as the pins on the MSP430F5529. The inital distance values were configured and are displayed below:
 
 ```c
+    uint32_t D_1 = 10;
+    uint32_t D_2 = 20;
+    uint32_t D_3 = 30;
+    uint32_t D_4 = 40;
+    uint32_t D_5 = 50;
+    int byte = 0;
+```
 
+Once all of the values were set, as well as the pins, the timers and UART were both configured. The BAUD rate used for this project was 9600. An infinite for loop was utilized for converting the output of the sensor to a distance reading in centimeters. This loop is shown below:
+
+```c
+    for(;;)
+    {
+         triggerMeasurement();
+
+        // Wait for echo start
+        __low_power_mode_3();
+
+         lastCount = TA0CCR2;
+
+        // Wait for echo end
+        __low_power_mode_3();
+
+        distance = TA0CCR2 - lastCount;
+        distance *= 34000;
+        distance >>= 14;  // division by 16384 (2 ^ 14)
 ```
