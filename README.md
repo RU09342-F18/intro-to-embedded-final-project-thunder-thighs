@@ -48,3 +48,5 @@ Once all of the values were set, as well as the pins, the timers and UART were b
         distance *= 34000;
         distance >>= 14;  // division by 16384 (2 ^ 14)
 ```
+
+This code is responsible for providing accurate distance calculations in centimeters based on the analog input. The rest of the code consists of using if statements to illuminate the correct light based on the distance, as well as interrupt service routines that set the transmit and receive buffers to send and receive over UART.
